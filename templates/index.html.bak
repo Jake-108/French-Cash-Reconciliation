@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cash Reconciliation — Control Panel</title>
+<style>
+  :root{
+    --bg:#0f1720; --panel:#16212e; --panel2:#1c2a3a; --line:#2a3b4d;
+    --ink:#e7eef5; --muted:#8fa3b7; --accent:#4c9aff; --accent2:#3b7fd6;
+    --ok:#37b26b; --warn:#e0a63a; --bad:#e5604d; --chip:#243449;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink)}
+  header{padding:18px 24px;border-bottom:1px solid var(--line);display:flex;
+    align-items:baseline;gap:14px;flex-wrap:wrap}
+  header h1{font-size:18px;margin:0;font-weight:650}
+  header .sub{color:var(--muted);font-size:13px}
+  main{max-width:1180px;margin:0 auto;padding:20px 24px 60px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:18px 20px;margin-bottom:18px}
+  .card h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--muted);margin:0 0 14px}
+  .row{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end}
+  label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+  input[type=number],input[type=date],select{background:var(--panel2);
+    border:1px solid var(--line);color:var(--ink);border-radius:8px;
+    padding:8px 10px;font-size:14px;width:150px}
+  input:focus,select:focus{outline:none;border-color:var(--accent)}
+  .check{display:flex;align-items:center;gap:8px;color:var(--ink);font-size:13px}
+  .check input{width:auto}
+  button{background:var(--accent);color:#fff;border:0;border-radius:8px;
+    padding:9px 16px;font-size:14px;font-weight:600;cursor:pointer}
+  button:hover{background:var(--accent2)}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+  button.ghost:hover{background:var(--panel2)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;
+    background:var(--chip);color:var(--muted)}
+  .pill.mock{background:#3a2f12;color:var(--warn)}
+  table{width:100%;border-collapse:collapse;margin-top:4px}
+  th,td{text-align:right;padding:9px 10px;border-bottom:1px solid var(--line);
+    font-variant-numeric:tabular-nums}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;
+    letter-spacing:.04em}
+  th:first-child,td:first-child{text-align:left}
+  td input[type=number]{width:110px;text-align:right}
+  tr.gap td.gapcell{color:var(--warn);font-weight:700}
+  tr.ok td.gapcell{color:var(--ok)}
+  tr.dup{opacity:.45}
+  .explain{display:none;margin-top:6px}
+  tr.needexplain .explain{display:block}
+  .explain textarea{width:100%;min-height:36px;background:var(--panel2);
+    border:1px solid var(--warn);color:var(--ink);border-radius:6px;padding:6px 8px;
+    font:13px inherit;resize:vertical}
+  .explain.filled textarea{border-color:var(--line)}
+  .muted{color:var(--muted)}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
+    background:var(--panel2);border:1px solid var(--line);padding:12px 18px;
+    border-radius:10px;max-width:80vw;box-shadow:0 8px 30px rgba(0,0,0,.4)}
+  .toast.err{border-color:var(--bad)} .toast.good{border-color:var(--ok)}
+  .hint{font-size:12px;color:var(--muted);margin-top:8px}
+  .subrow{font-size:11px;color:var(--muted)}
+  .flex-between{display:flex;justify-content:space-between;align-items:center;
+    gap:12px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<header>
+  <h1>Cash Reconciliation</h1>
+  <span class="sub" id="wbname"></span>
+  <span class="pill mock" id="modepill" style="display:none">DEMO DATA</span>
+</header>
+<main>
+
+  <div class="card">
+    <h2>Settings — how data is written to Excel</h2>
+    <div class="row">
+      <div>
+        <label>Till-float floor (€)</label>
+        <input type="number" id="min_float" step="0.01" min="0">
+        <div class="hint">Caisse = last value, never below this.</div>
+      </div>
+      <div>
+        <label>Gap threshold (€)</label>
+        <input type="number" id="gap_threshold" step="0.01" min="0">
+        <div class="hint">Gaps at/above this must be explained.</div>
+      </div>
+      <div>
+        <label>Zelty source</label>
+        <select id="zelty_mode">
+          <option value="mock">Demo / mock data</option>
+          <option value="api">Live Zelty API</option>
+        </select>
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <div class="check">
+          <input type="checkbox" id="require_gap_explanation">
+          <span>Require an explanation for every gap</span>
+        </div>
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <button class="ghost" id="saveSettings">Save settings</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Populate a day</h2>
+    <div class="row">
+      <div>
+        <label>Date</label>
+        <input type="date" id="date">
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <button id="populate">Populate data</button>
+      </div>
+      <div class="hint" id="populateHint" style="max-width:520px">
+        Pulls each site's cash for the date, carries the till float forward
+        (floored), then you enter the counted cash. Gaps must be explained.
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="gridCard" style="display:none">
+    <div class="flex-between">
+      <h2 style="margin:0">Sites — <span id="gridDate"></span></h2>
+      <div>
+        <span class="muted" id="gapSummary"></span>
+        &nbsp;&nbsp;
+        <button id="write">Write to Excel</button>
+      </div>
+    </div>
+    <table id="grid">
+      <thead>
+        <tr>
+          <th>Site</th>
+          <th>Till float (C)</th>
+          <th>Zelty cash (D)</th>
+          <th>Counted (H)</th>
+          <th>Sortie (I)</th>
+          <th>Dépôt (G)</th>
+          <th>Gap (D−H)</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div class="hint">
+      Till float is applied automatically (last value, floored). Zelty is
+      editable while in demo mode. A .bak backup is taken before writing.
+    </div>
+  </div>
+
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let STATE = null;
+
+function money(n){ return (Number(n)||0).toFixed(2); }
+function toast(msg, kind){
+  const t = document.createElement('div');
+  t.className = 'toast ' + (kind||'');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), kind==='err'?6000:3500);
+}
+
+async function loadState(){
+  const r = await fetch('/api/state'); STATE = await r.json();
+  $('wbname').textContent = STATE.workbook;
+  const s = STATE.settings;
+  $('min_float').value = s.min_float;
+  $('gap_threshold').value = s.gap_threshold;
+  $('require_gap_explanation').checked = s.require_gap_explanation;
+  $('zelty_mode').value = s.zelty_mode;
+  $('modepill').style.display = s.zelty_mode === 'mock' ? 'inline-block' : 'none';
+  if (STATE.suggested_date) $('date').value = STATE.suggested_date;
+}
+
+$('saveSettings').onclick = async () => {
+  const body = {
+    min_float: parseFloat($('min_float').value),
+    gap_threshold: parseFloat($('gap_threshold').value),
+    require_gap_explanation: $('require_gap_explanation').checked,
+    zelty_mode: $('zelty_mode').value,
+  };
+  const r = await fetch('/api/settings', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  STATE.settings = await r.json();
+  $('modepill').style.display = STATE.settings.zelty_mode==='mock'?'inline-block':'none';
+  toast('Settings saved.', 'good');
+};
+
+$('populate').onclick = async () => {
+  const date = $('date').value;
+  if(!date){ toast('Pick a date first.', 'err'); return; }
+  $('populate').disabled = true;
+  try{
+    const r = await fetch('/api/populate', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify({date})});
+    const data = await r.json();
+    if(!r.ok){ toast(data.error||'Populate failed.', 'err'); return; }
+    renderGrid(data);
+  } finally { $('populate').disabled = false; }
+};
+
+function renderGrid(data){
+  $('gridCard').style.display = 'block';
+  $('gridDate').textContent = data.date + (data.mode==='mock' ? '  (demo cash)' : '');
+  const tb = $('grid').querySelector('tbody');
+  tb.innerHTML = '';
+  const thr = STATE.settings.gap_threshold;
+  data.rows.forEach(row => {
+    const tr = document.createElement('tr');
+    tr.dataset.site = row.site;
+    if(row.duplicate) tr.classList.add('dup');
+    tr.innerHTML = `
+      <td>${row.site}${row.duplicate?' <span class="pill">already has this date</span>':''}
+        <div class="subrow">last ${row.last_date||'—'} · float was ${money(row.last_caisse)}</div></td>
+      <td>${money(row.caisse)}</td>
+      <td><input type="number" step="0.01" class="zelty" value="${money(row.zelty)}" ${row.duplicate?'disabled':''}></td>
+      <td><input type="number" step="0.01" class="counted" placeholder="0.00" ${row.duplicate?'disabled':''}></td>
+      <td><input type="number" step="0.01" class="sortie" value="0" ${row.duplicate?'disabled':''}></td>
+      <td><input type="number" step="0.01" class="depot" value="0" ${row.duplicate?'disabled':''}></td>
+      <td class="gapcell">—</td>`;
+    const cell = tr.querySelector('.gapcell');
+    const explain = document.createElement('div');
+    explain.className = 'explain';
+    explain.innerHTML = `<textarea placeholder="Explain the gap…"></textarea>`;
+    tr.querySelector('td:first-child').appendChild(explain);
+
+    function recompute(){
+      if(row.duplicate){ cell.textContent='skipped'; return; }
+      const z = parseFloat(tr.querySelector('.zelty').value)||0;
+      const h = parseFloat(tr.querySelector('.counted').value)||0;
+      const gap = z - h;
+      cell.textContent = (gap>=0?'+':'') + money(gap);
+      const big = Math.abs(gap) >= thr;
+      tr.classList.toggle('gap', big);
+      tr.classList.toggle('ok', !big);
+      tr.classList.toggle('needexplain', big && STATE.settings.require_gap_explanation);
+      const ta = explain.querySelector('textarea');
+      ta.placeholder = `Explain the ${(gap>=0?'+':'')+money(gap)} gap (saved as "${data.date} — …")`;
+      explain.classList.toggle('filled', ta.value.trim().length>0);
+      updateSummary();
+    }
+    tr.querySelectorAll('input').forEach(i=>i.addEventListener('input', recompute));
+    explain.querySelector('textarea').addEventListener('input', ()=>{
+      explain.classList.toggle('filled', explain.querySelector('textarea').value.trim().length>0);
+      updateSummary();
+    });
+    tb.appendChild(tr);
+    recompute();
+  });
+  updateSummary();
+}
+
+function collectRows(){
+  return [...$('grid').querySelectorAll('tbody tr')]
+    .filter(tr => !tr.classList.contains('dup'))
+    .map(tr => ({
+      site: tr.dataset.site,
+      zelty: parseFloat(tr.querySelector('.zelty').value)||0,
+      counted: parseFloat(tr.querySelector('.counted').value)||0,
+      sortie: parseFloat(tr.querySelector('.sortie').value)||0,
+      depot: parseFloat(tr.querySelector('.depot').value)||0,
+      comment: (tr.querySelector('.explain textarea').value||'').trim(),
+    }));
+}
+
+function updateSummary(){
+  const thr = STATE.settings.gap_threshold;
+  const rows = collectRows();
+  const gaps = rows.filter(r => Math.abs(r.zelty-r.counted) >= thr);
+  const unexplained = gaps.filter(r => !r.comment).length;
+  $('gapSummary').textContent =
+    `${gaps.length} gap(s)` + (unexplained ? `, ${unexplained} unexplained` : '');
+  $('write').disabled = STATE.settings.require_gap_explanation && unexplained>0;
+}
+
+$('write').onclick = async () => {
+  const date = $('date').value;
+  const rows = collectRows();
+  if(!rows.length){ toast('Nothing to write.', 'err'); return; }
+  $('write').disabled = true;
+  try{
+    const r = await fetch('/api/write', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify({date, rows})});
+    const data = await r.json();
+    if(!r.ok){ toast(data.error||'Write failed.', 'err'); return; }
+    const wrote = data.results.filter(x=>x.written).length;
+    const skipped = data.results.length - wrote;
+    toast(`Wrote ${wrote} row(s)${skipped?`, ${skipped} skipped`:''}. Reloading…`, 'good');
+    setTimeout(async ()=>{ await loadState(); document.getElementById('populate').click(); }, 1200);
+  } finally { $('write').disabled = false; }
+};
+
+loadState();
+</script>
+</body>
+</html>

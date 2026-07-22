@@ -1,0 +1,6 @@
+{
+  "min_float": 150.0,
+  "gap_threshold": 0.01,
+  "require_gap_explanation": true,
+  "zelty_mode": "manual"
+}
